@@ -64,3 +64,43 @@ body.wpfb-has-sidebar.folded #wpfb-sidebar {
 .media-frame-router ~ .media-frame-content .media-frame-content-router {
 	padding-left: 0;
 }
+
+/* ================================================================
+   GRID VIEW — Fixed sidebar for #wpfb-grid-sidebar
+   ================================================================ */
+
+body.wpfb-has-grid-sidebar #wpbody-content {
+	margin-left: 250px !important;
+}
+
+#wpfb-grid-sidebar {
+	position: fixed !important;
+	top: 32px !important;
+	left: 160px !important;
+	width: 250px !important;
+	height: calc(100vh - 32px) !important;
+	overflow-y: auto !important;
+	z-index: 999 !important;
+	background: #f6f7f7 !important;
+	border-right: 1px solid #dcdcde !important;
+	box-sizing: border-box !important;
+}
+
+body.folded #wpfb-grid-sidebar {
+	left: 36px !important;
+}
+
+@media (max-width: 960px) {
+	body.auto-fold:not(.folded) #wpfb-grid-sidebar {
+		left: 36px !important;
+	}
+}
+
+@media (max-width: 782px) {
+	body.wpfb-has-grid-sidebar #wpbody-content {
+		margin-left: 0 !important;
+	}
+	#wpfb-grid-sidebar {
+		display: none !important;
+	}
+}
