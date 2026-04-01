@@ -6,7 +6,7 @@
  *  2. Filter attachments by selected folder.
  *  3. Auto-assign newly uploaded files to the active folder.
  */
-/* global wpfbData, wpfbMediaData, wpfbTree */
+/* global wpfbData, wpfbMediaData */
 
 ( function ( $ ) {
 	'use strict';
@@ -16,159 +16,202 @@
 	}
 
 	// Active folder ID (-1 = all items).
-	let activeFolderId = -1;
+	var activeFolderId = -1;
 
-	// --------------------------------------------------------------------- //
-	//  Extend AttachmentsBrowser to inject sidebar and filter by folder      //
-	// --------------------------------------------------------------------- //
+	// ------------------------------------------------------------------ //
+	//  Inject sidebar into grid view using polling                        //
+	// ------------------------------------------------------------------ //
 
-	const OriginalAttachmentsBrowser = wp.media.view.AttachmentsBrowser;
-
-	wp.media.view.AttachmentsBrowser = OriginalAttachmentsBrowser.extend( {
-
-		/**
-		 * Override createSidebar to also inject our folder sidebar.
-		 */
-		createSidebar: function () {
-			OriginalAttachmentsBrowser.prototype.createSidebar.apply( this, arguments );
-			this._injectFolderSidebar();
-		},
-
-		/**
-		 * Inject the WP Folder Boss sidebar HTML into the media frame.
-		 */
-		_injectFolderSidebar: function () {
-			const sidebar = document.getElementById( 'wpfb-sidebar' );
-			if ( ! sidebar ) return;
-
-			const browserEl = this.el;
-			if ( ! browserEl ) return;
-
-			// Move the sidebar into the browser element.
-			browserEl.insertBefore( sidebar, browserEl.firstChild );
-			sidebar.style.display = '';
-
-			// When a folder is selected, filter the collection.
-			document.addEventListener( 'wpfb:folder-selected', ( e ) => {
-				if ( e.detail.context !== 'media' ) return;
-				activeFolderId = parseInt( e.detail.folderId, 10 );
-				this._filterByFolder( activeFolderId );
-			} );
-		},
-
-		/**
-		 * Trigger a re-query of the attachment collection with the folder filter.
-		 *
-		 * @param {number} folderId
-		 */
-		_filterByFolder: function ( folderId ) {
-			const collection = this.collection;
-			if ( ! collection ) return;
-
-			const props = collection.props;
-
-			if ( folderId === -1 ) {
-				// All items — remove any folder filter.
-				props.unset( 'wpfb_folder' );
-			} else {
-				props.set( 'wpfb_folder', folderId );
-			}
-
-			// Refresh the collection.
-			collection.reset();
-			collection.more();
-		},
-
-	} );
-
-	// --------------------------------------------------------------------- //
-	//  Inject folder filter param into AJAX request for attachments          //
-	// --------------------------------------------------------------------- //
-
-	/**
-	 * Extend wp.media.model.Query to pass the wpfb_folder param.
-	 */
-	const OriginalQuery = wp.media.model.Query;
-
-	// Override the `sync` method to inject the folder query arg.
-	const originalSync = OriginalQuery.prototype.sync;
-
-	OriginalQuery.prototype.sync = function ( method, model, options ) {
-		if ( 'read' === method ) {
-			const folderId = this.props.get( 'wpfb_folder' );
-			if ( typeof folderId !== 'undefined' ) {
-				const origData   = options.data || {};
-				options.data     = Object.assign( {}, origData, { wpfb_folder: folderId } );
-			}
+	function injectSidebar() {
+		var sidebar = document.getElementById( 'wpfb-sidebar' );
+		if ( ! sidebar ) {
+			return false;
 		}
 
-		return originalSync.call( this, method, model, options );
-	};
+		// Already injected?
+		if ( sidebar.getAttribute( 'data-wpfb-injected' ) === '1' ) {
+			return true;
+		}
 
-	// --------------------------------------------------------------------- //
-	//  Handle server-side folder filtering                                   //
-	// --------------------------------------------------------------------- //
+		// Find the media frame content area (grid view target)
+		var target = document.querySelector( '.media-frame-content' );
 
-	// Add a custom query variable handler so WP will recognise wpfb_folder in
-	// the attachments AJAX endpoint (wp_ajax_query-attachments).
-	//
-	// On the PHP side, the MediaLibrary class already hooks into pre_get_posts,
-	// but for the media modal we need to handle via wp_query_vars approach.
-	// The media modal sends extra params in `query` — we pass it as post_query.
-	// NOTE: The PHP side reads $_REQUEST['query']['wpfb_folder'] via
-	//       WP_Query's `tax_query`. This JS layer simply ensures the param
-	//       is appended to the query data.
+		if ( ! target ) {
+			return false;
+		}
 
-	$( document ).on( 'heartbeat-send.wpfb', function () {
-		// Not needed but here for extensibility.
-	} );
+		// Make the target a flex container so sidebar sits beside the grid
+		target.style.display = 'flex';
+		target.style.flexDirection = 'row';
+		target.style.position = 'relative';
 
-	// --------------------------------------------------------------------- //
-	//  Auto-assign uploads to the active folder                              //
-	// --------------------------------------------------------------------- //
+		// Insert sidebar as first child of .media-frame-content
+		target.insertBefore( sidebar, target.firstChild );
 
-	if ( wp.Uploader ) {
-		const originalInit = wp.Uploader.prototype.init;
+		// Show sidebar and mark as injected
+		sidebar.style.display = '';
+		sidebar.style.position = 'relative';
+		sidebar.style.height = 'auto';
+		sidebar.style.minHeight = '100%';
+		sidebar.style.zIndex = '10';
+		sidebar.style.flexShrink = '0';
+		sidebar.setAttribute( 'data-wpfb-injected', '1' );
 
-		wp.Uploader.prototype.init = function () {
-			originalInit && originalInit.apply( this, arguments );
+		// Make the attachments browser take remaining space
+		var browser = target.querySelector( '.attachments-browser' );
+		if ( browser ) {
+			browser.style.flex = '1';
+			browser.style.minWidth = '0';
+		}
 
-			this.uploader.bind( 'FileUploaded', function ( uploader, file, response ) {
-				const attachmentId = response && response.response && response.response.id;
-				if ( ! attachmentId ) return;
-				if ( activeFolderId <= 0 ) return;
+		return true;
+	}
 
-				// Assign the uploaded file to the active folder via REST.
-				fetch( wpfbData.restUrl + '/assign', {
-					method  : 'POST',
-					headers : {
-						'Content-Type': 'application/json',
-						'X-WP-Nonce'  : wpfbData.nonce,
-					},
-					body: JSON.stringify( {
-						folder_id : activeFolderId,
-						item_ids  : [ attachmentId ],
-						item_type : 'post',
-					} ),
-				} ).catch( () => {} );
-			} );
+	/**
+	 * Poll until sidebar HTML and target container both exist in DOM.
+	 */
+	function waitAndInject() {
+		if ( injectSidebar() ) {
+			return;
+		}
+
+		var attempts = 0;
+		var interval = setInterval( function () {
+			attempts++;
+			if ( injectSidebar() || attempts > 200 ) {
+				clearInterval( interval );
+			}
+		}, 100 );
+	}
+
+	// ------------------------------------------------------------------ //
+	//  Filter attachments by folder via wp.media.model.Query              //
+	// ------------------------------------------------------------------ //
+
+	if ( wp.media.model && wp.media.model.Query ) {
+		var OrigSync = wp.media.model.Query.prototype.sync;
+
+		wp.media.model.Query.prototype.sync = function ( method, model, options ) {
+			if ( 'read' === method && activeFolderId !== -1 ) {
+				options = options || {};
+				options.data = options.data || {};
+
+				// WordPress sends grid params inside options.data.query
+				if ( typeof options.data.query === 'object' && options.data.query !== null ) {
+					options.data.query.wpfb_folder = activeFolderId;
+				} else {
+					options.data.wpfb_folder = activeFolderId;
+				}
+			}
+			return OrigSync.call( this, method, model, options );
 		};
 	}
 
-	// --------------------------------------------------------------------- //
-	//  React to items being moved (update folder counts in sidebar)          //
-	// --------------------------------------------------------------------- //
+	// ------------------------------------------------------------------ //
+	//  Listen for folder selection events from folder-tree.js             //
+	// ------------------------------------------------------------------ //
 
-	document.addEventListener( 'wpfb:items-moved', () => {
-		// Refresh media grid.
-		if ( wp.media && wp.media.frame ) {
-			try {
-				wp.media.frame.content.get().collection.reset();
-				wp.media.frame.content.get().collection.more();
-			} catch ( e ) {
-				// Frame may not be open.
-			}
+	document.addEventListener( 'wpfb:folder-selected', function ( e ) {
+		if ( ! e.detail || e.detail.context !== 'media' ) {
+			return;
 		}
+		activeFolderId = parseInt( e.detail.folderId, 10 );
+
+		// Refresh the grid collection
+		refreshGrid();
 	} );
+
+	function refreshGrid() {
+		if ( ! wp.media || ! wp.media.frame ) {
+			return;
+		}
+		try {
+			var browser = wp.media.frame.content.get();
+			if ( browser && browser.collection ) {
+				if ( activeFolderId === -1 ) {
+					browser.collection.props.unset( 'wpfb_folder' );
+				} else {
+					browser.collection.props.set( 'wpfb_folder', activeFolderId );
+				}
+				browser.collection.reset();
+				browser.collection.more();
+			}
+		} catch ( err ) {
+			// Frame not ready yet — will apply on next query
+		}
+	}
+
+	// ------------------------------------------------------------------ //
+	//  Auto-assign uploads to the active folder                           //
+	// ------------------------------------------------------------------ //
+
+	if ( wp.Uploader ) {
+		var origUploaderInit = wp.Uploader.prototype.init;
+
+		wp.Uploader.prototype.init = function () {
+			if ( origUploaderInit ) {
+				origUploaderInit.apply( this, arguments );
+			}
+
+			this.uploader.bind( 'FileUploaded', function ( up, file, response ) {
+				if ( activeFolderId <= 0 ) {
+					return;
+				}
+
+				// WordPress returns the response as a JSON string in response.response
+				var parsed;
+				try {
+					parsed = JSON.parse( response.response );
+				} catch ( e ) {
+					return;
+				}
+
+				var attachmentId = parsed && parsed.id;
+				if ( ! attachmentId ) {
+					return;
+				}
+
+				// Assign the uploaded file to the active folder via REST
+				fetch( wpfbData.restUrl + '/assign', {
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						'X-WP-Nonce': wpfbData.nonce,
+					},
+					body: JSON.stringify( {
+						folder_id: activeFolderId,
+						item_ids: [ attachmentId ],
+						item_type: 'post',
+					} ),
+				} ).catch( function () {} );
+				});
+			}
+	}
+
+	// ------------------------------------------------------------------ //
+	//  React to items being moved (refresh grid)                          //
+	// ------------------------------------------------------------------ //
+
+	document.addEventListener( 'wpfb:items-moved', function () {
+		refreshGrid();
+	} );
+
+	// ------------------------------------------------------------------ //
+	//  Initialize — wait for DOM then start polling                        //
+	// ------------------------------------------------------------------ //
+
+	function init() {
+		waitAndInject();
+		// Additional delayed attempts for slow-loading pages
+		setTimeout( waitAndInject, 500 );
+		setTimeout( waitAndInject, 1500 );
+		setTimeout( waitAndInject, 3000 );
+	}
+
+	if ( document.readyState === 'loading' ) {
+		document.addEventListener( 'DOMContentLoaded', init );
+	} else {
+		init();
+	}
 
 } )( jQuery );
