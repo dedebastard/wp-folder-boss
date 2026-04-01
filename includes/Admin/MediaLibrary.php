@@ -23,6 +23,13 @@ if ( ! defined( 'ABSPATH' ) ) {
 class MediaLibrary {
 
 	/**
+	 * Track whether sidebar has been rendered.
+	 *
+	 * @var bool
+	 */
+	private bool $sidebar_rendered = false;
+
+	/**
 	 * Register hooks.
 	 *
 	 * @return void
@@ -36,8 +43,11 @@ class MediaLibrary {
 		add_action( 'admin_footer-upload.php', array( $this, 'render_grid_sidebar' ) );
 		add_action( 'restrict_manage_posts', array( $this, 'render_list_sidebar' ) );
 
-		// Filter query when a folder is selected.
+		// Filter query when a folder is selected (list view).
 		add_action( 'pre_get_posts', array( $this, 'filter_by_folder' ) );
+
+		// Filter AJAX query for grid view.
+		add_filter( 'ajax_query_attachments_args', array( $this, 'filter_ajax_attachments' ) );
 
 		// Add Folder column to media list view.
 		add_filter( 'manage_upload_columns', array( $this, 'add_folder_column' ) );
@@ -81,7 +91,7 @@ class MediaLibrary {
 		wp_enqueue_script(
 			'wpfb-media-library',
 			WPFB_PLUGIN_URL . 'assets/js/media-library.js',
-			array( 'wpfb-folder-tree', 'media' ),
+			array( 'wpfb-folder-tree', 'media', 'jquery' ),
 			WPFB_VERSION,
 			true
 		);
@@ -107,6 +117,11 @@ class MediaLibrary {
 	 * @return void
 	 */
 	public function render_grid_sidebar(): void {
+		if ( $this->sidebar_rendered ) {
+			return;
+		}
+		$this->sidebar_rendered = true;
+
 		$service = new FolderService();
 		$folders = $service->get_folders( 'media' );
 		$context = 'media';
@@ -123,6 +138,11 @@ class MediaLibrary {
 		if ( 'attachment' !== $post_type ) {
 			return;
 		}
+		if ( $this->sidebar_rendered ) {
+			return;
+		}
+		$this->sidebar_rendered = true;
+
 		$service = new FolderService();
 		$folders = $service->get_folders( 'media' );
 		$context = 'media';
@@ -130,7 +150,7 @@ class MediaLibrary {
 	}
 
 	/**
-	 * Filter the media query by the selected folder.
+	 * Filter the media query by the selected folder (list view).
 	 *
 	 * @param \WP_Query $query Main WP_Query.
 	 * @return void
@@ -145,14 +165,13 @@ class MediaLibrary {
 			return;
 		}
 
-		$folder_id = isset( $_GET['wpfb_folder'] ) ? absint( wp_unslash( $_GET['wpfb_folder'] ) ) : - 1; // phpcs:ignore WordPress.Security.NonceVerification
+		$folder_id = isset( $_GET['wpfb_folder'] ) ? absint( wp_unslash( $_GET['wpfb_folder'] ) ) : -1; // phpcs:ignore WordPress.Security.NonceVerification
 
 		if ( $folder_id < 0 ) {
 			return;
 		}
 
 		if ( 0 === $folder_id ) {
-			// Uncategorized: items NOT IN any wpfb_folder term.
 			$query->set(
 				'tax_query',
 				array(
@@ -174,6 +193,40 @@ class MediaLibrary {
 				)
 			);
 		}
+	}
+
+	/**
+	 * Filter the AJAX attachments query for the grid view.
+	 *
+	 * @param array<string,mixed> $query Query arguments.
+	 * @return array<string,mixed>
+	 */
+	public function filter_ajax_attachments( array $query ): array {
+		// phpcs:ignore WordPress.Security.NonceVerification
+		$folder_id = isset( $_REQUEST['query']['wpfb_folder'] ) ? absint( $_REQUEST['query']['wpfb_folder'] ) : -1;
+
+		if ( $folder_id < 0 ) {
+			return $query;
+		}
+
+		if ( 0 === $folder_id ) {
+			$query['tax_query'] = array(
+				array(
+					'taxonomy' => WPFB_TAXONOMY,
+					'operator' => 'NOT EXISTS',
+				),
+			);
+		} else {
+			$query['tax_query'] = array(
+				array(
+					'taxonomy' => WPFB_TAXONOMY,
+					'field'    => 'term_id',
+					'terms'    => $folder_id,
+				),
+			);
+		}
+
+		return $query;
 	}
 
 	/**
