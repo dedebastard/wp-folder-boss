@@ -34,10 +34,10 @@ class MediaLibrary {
 
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
 
-		// List view sidebar (rendered inside the filter bar area).
+		// List view: sidebar rendered inside filter area.
 		add_action( 'restrict_manage_posts', array( $this, 'render_list_sidebar' ) );
 
-		// Grid view sidebar (rendered in the footer, positioned via CSS).
+		// Grid view: sidebar rendered in footer (positioned via CSS fixed).
 		add_action( 'admin_footer-upload.php', array( $this, 'render_grid_sidebar' ) );
 
 		// Filter query when a folder is selected (list view).
@@ -88,12 +88,11 @@ class MediaLibrary {
 		wp_enqueue_script(
 			'wpfb-media-library',
 			WPFB_PLUGIN_URL . 'assets/js/media-library.js',
-			array( 'wpfb-folder-tree', 'media' ),
+			array( 'wpfb-folder-tree' ),
 			WPFB_VERSION,
 			true
 		);
 
-		// Pass folders for the media context.
 		$service = new FolderService();
 		$folders = $service->get_folders( 'media' );
 		$data    = array_map( fn( $f ) => $f->to_array(), $folders );
@@ -125,8 +124,9 @@ class MediaLibrary {
 	}
 
 	/**
-	 * Render the folder tree sidebar for the grid view (in footer).
-	 * Uses a different ID so it doesn't conflict with the list view sidebar.
+	 * Render the folder tree sidebar for the grid view in the footer.
+	 * Uses a different ID (#wpfb-grid-sidebar) so it doesn't conflict
+	 * with the list view sidebar (#wpfb-sidebar).
 	 *
 	 * @return void
 	 */
@@ -134,39 +134,38 @@ class MediaLibrary {
 		$service = new FolderService();
 		$folders = $service->get_folders( 'media' );
 		$context = 'media';
-
-		// Output a grid-specific sidebar with a different wrapper ID.
+		$icon_url = esc_url( WPFB_PLUGIN_URL . 'assets/images/icon-folder.svg' );
 		?>
 		<div id="wpfb-grid-sidebar" class="wpfb-sidebar" data-context="<?php echo esc_attr( $context ); ?>" style="display:none">
 			<div class="wpfb-sidebar-header">
 				<span class="wpfb-sidebar-title"><?php esc_html_e( 'Folders', 'wp-folder-boss' ); ?></span>
 				<button type="button" class="wpfb-add-folder-btn button button-small" title="<?php esc_attr_e( 'Add Folder', 'wp-folder-boss' ); ?>">+</button>
 			</div>
-
 			<ul class="wpfb-folder-tree" id="wpfb-grid-folder-tree" role="tree">
 				<li class="wpfb-folder-item wpfb-virtual" data-id="-1" role="treeitem" aria-selected="false">
 					<span class="wpfb-folder-node">
 						<span class="wpfb-toggle-placeholder"></span>
-						<img src="<?php echo esc_url( WPFB_PLUGIN_URL . 'assets/images/icon-folder.svg' ); ?>" class="wpfb-folder-icon" alt="" />
+						<img src="<?php echo $icon_url; ?>" class="wpfb-folder-icon" alt="" />
 						<span class="wpfb-folder-name"><?php esc_html_e( 'All Items', 'wp-folder-boss' ); ?></span>
 					</span>
 				</li>
 				<li class="wpfb-folder-item wpfb-virtual" data-id="0" role="treeitem" aria-selected="false">
 					<span class="wpfb-folder-node">
 						<span class="wpfb-toggle-placeholder"></span>
-						<img src="<?php echo esc_url( WPFB_PLUGIN_URL . 'assets/images/icon-folder.svg' ); ?>" class="wpfb-folder-icon" alt="" />
+						<img src="<?php echo $icon_url; ?>" class="wpfb-folder-icon" alt="" />
 						<span class="wpfb-folder-name"><?php esc_html_e( 'Uncategorized', 'wp-folder-boss' ); ?></span>
 					</span>
 				</li>
 				<?php
 				foreach ( $folders as $folder ) {
 					if ( 0 === $folder->parent ) {
-						\wpfb_render_folder_node( $folder, $folders );
+						if ( function_exists( 'wpfb_render_folder_node' ) ) {
+							\wpfb_render_folder_node( $folder, $folders );
+						}
 					}
 				}
 				?>
 			</ul>
-
 			<div class="wpfb-resize-handle" title="<?php esc_attr_e( 'Drag to resize', 'wp-folder-boss' ); ?>"></div>
 		</div>
 		<?php
