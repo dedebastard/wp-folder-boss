@@ -1,17 +1,17 @@
 /**
  * WP Folder Boss — Media Library Grid Integration
  */
-/* global wpfbData, jQuery */
+/* global wpfbData */
 
-( function ( $ ) {
+( function () {
 	'use strict';
-
-	if ( typeof wp === 'undefined' || ! wp.media ) {
-		return;
-	}
 
 	var activeFolderId = -1;
 	var injected = false;
+	var syncPatched = false;
+	var uploaderPatched = false;
+	var MAX_POLL_ATTEMPTS = 300;
+	var POLL_INTERVAL_MS = 100;
 
 	/* --------------------------------------------------------- */
 	/*  1. Show grid sidebar with fixed positioning via CSS      */
@@ -20,12 +20,11 @@
 	function showGridSidebar() {
 		if ( injected ) return true;
 
-		// Only act in grid mode
-		var isGridMode = document.querySelector( '.media-frame' ) !== null;
-		if ( ! isGridMode ) return false;
-
 		var sidebar = document.getElementById( 'wpfb-grid-sidebar' );
 		if ( ! sidebar ) return false;
+
+		var mediaFrame = document.querySelector( '.media-frame' );
+		if ( ! mediaFrame ) return false;
 
 		// Show the sidebar
 		sidebar.style.display = '';
@@ -40,22 +39,16 @@
 		return true;
 	}
 
-	function poll() {
-		if ( showGridSidebar() ) return;
-		var attempts = 0;
-		var iv = setInterval( function () {
-			attempts++;
-			if ( showGridSidebar() || attempts > 300 ) {
-				clearInterval( iv );
-			}
-		}, 100 );
-	}
-
 	/* --------------------------------------------------------- */
-	/*  2. Pass wpfb_folder to the AJAX query                    */
+	/*  2. Patch wp.media.model.Query.prototype.sync             */
 	/* --------------------------------------------------------- */
 
-	if ( wp.media.model && wp.media.model.Query ) {
+	function patchSync() {
+		if ( syncPatched ) return true;
+		if ( typeof wp === 'undefined' || ! wp.media || ! wp.media.model || ! wp.media.model.Query ) {
+			return false;
+		}
+
 		var OrigSync = wp.media.model.Query.prototype.sync;
 
 		wp.media.model.Query.prototype.sync = function ( method, model, options ) {
@@ -71,38 +64,21 @@
 			}
 			return OrigSync.call( this, method, model, options );
 		};
+
+		syncPatched = true;
+		return true;
 	}
 
 	/* --------------------------------------------------------- */
-	/*  3. Listen for folder selection and refresh grid           */
+	/*  3. Patch wp.Uploader for auto-assign on upload           */
 	/* --------------------------------------------------------- */
 
-	document.addEventListener( 'wpfb:folder-selected', function ( e ) {
-		if ( e.detail.context !== 'media' ) return;
-		activeFolderId = parseInt( e.detail.folderId, 10 );
-
-		// Grid mode: refresh via wp.media
-		if ( wp.media.frame ) {
-			try {
-				var content = wp.media.frame.content.get();
-				if ( content && content.collection ) {
-					if ( activeFolderId === -1 ) {
-						content.collection.props.unset( 'wpfb_folder' );
-					} else {
-						content.collection.props.set( 'wpfb_folder', activeFolderId );
-					}
-					content.collection.reset();
-					content.collection.more();
-				}
-			} catch ( err ) {}
+	function patchUploader() {
+		if ( uploaderPatched ) return true;
+		if ( typeof wp === 'undefined' || ! wp.Uploader ) {
+			return false;
 		}
-	} );
 
-	/* --------------------------------------------------------- */
-	/*  4. Auto-assign uploads to active folder                  */
-	/* --------------------------------------------------------- */
-
-	if ( wp.Uploader ) {
 		var origInit = wp.Uploader.prototype.init;
 
 		wp.Uploader.prototype.init = function () {
@@ -137,14 +113,66 @@
 				} ).catch( function () {} );
 			} );
 		};
+
+		uploaderPatched = true;
+		return true;
 	}
 
 	/* --------------------------------------------------------- */
-	/*  5. Refresh grid when items are moved                     */
+	/*  4. Poll until sidebar and media frame are ready          */
+	/* --------------------------------------------------------- */
+
+	function poll() {
+		var sidebarDone = showGridSidebar();
+		var syncDone = patchSync();
+		var uploaderDone = patchUploader();
+
+		if ( sidebarDone && syncDone && uploaderDone ) return;
+
+		var attempts = 0;
+		var iv = setInterval( function () {
+			attempts++;
+			sidebarDone = sidebarDone || showGridSidebar();
+			syncDone = syncDone || patchSync();
+			uploaderDone = uploaderDone || patchUploader();
+
+			if ( ( sidebarDone && syncDone && uploaderDone ) || attempts > MAX_POLL_ATTEMPTS ) {
+				clearInterval( iv );
+			}
+		}, POLL_INTERVAL_MS );
+	}
+
+	/* --------------------------------------------------------- */
+	/*  5. Listen for folder selection and refresh grid          */
+	/* --------------------------------------------------------- */
+
+	document.addEventListener( 'wpfb:folder-selected', function ( e ) {
+		if ( e.detail.context !== 'media' ) return;
+		activeFolderId = parseInt( e.detail.folderId, 10 );
+
+		// Grid mode: refresh via wp.media
+		if ( typeof wp !== 'undefined' && wp.media && wp.media.frame ) {
+			try {
+				var content = wp.media.frame.content.get();
+				if ( content && content.collection ) {
+					if ( activeFolderId === -1 ) {
+						content.collection.props.unset( 'wpfb_folder' );
+					} else {
+						content.collection.props.set( 'wpfb_folder', activeFolderId );
+					}
+					content.collection.reset();
+					content.collection.more();
+				}
+			} catch ( err ) {}
+		}
+	} );
+
+	/* --------------------------------------------------------- */
+	/*  6. Refresh grid when items are moved                     */
 	/* --------------------------------------------------------- */
 
 	document.addEventListener( 'wpfb:items-moved', function () {
-		if ( wp.media && wp.media.frame ) {
+		if ( typeof wp !== 'undefined' && wp.media && wp.media.frame ) {
 			try {
 				var content = wp.media.frame.content.get();
 				if ( content && content.collection ) {
@@ -156,7 +184,7 @@
 	} );
 
 	/* --------------------------------------------------------- */
-	/*  6. Start polling for grid mode                           */
+	/*  7. Start polling                                         */
 	/* --------------------------------------------------------- */
 
 	if ( document.readyState === 'loading' ) {
@@ -165,8 +193,4 @@
 		poll();
 	}
 
-	setTimeout( poll, 300 );
-	setTimeout( poll, 1000 );
-	setTimeout( poll, 2000 );
-
-} )( jQuery );
+} )();

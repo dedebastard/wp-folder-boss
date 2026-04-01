@@ -88,7 +88,7 @@ class MediaLibrary {
 		wp_enqueue_script(
 			'wpfb-media-library',
 			WPFB_PLUGIN_URL . 'assets/js/media-library.js',
-			array( 'wpfb-folder-tree', 'media', 'jquery' ),
+			array( 'wpfb-folder-tree', 'media' ),
 			WPFB_VERSION,
 			true
 		);
