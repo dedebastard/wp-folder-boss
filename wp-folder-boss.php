@@ -3,7 +3,7 @@
  * Plugin Name: WP Folder Boss
  * Plugin URI: https://github.com/dedebastard/wp-folder-boss
  * Description: Organize your media library, pages, posts, custom post types, users, plugins, WooCommerce orders, products, coupons, and more using folders. Drag and drop, bulk move, and auto-assign uploads.
- * Version: 1.0.1
+ * Version: 1.0.2
  * Requires at least: 6.0
  * Requires PHP: 8.0
  * Author: dedebastard
@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'WPFB_VERSION', '1.0.1' );
+define( 'WPFB_VERSION', '1.0.2' );
 define( 'WPFB_PLUGIN_FILE', __FILE__ );
 define( 'WPFB_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'WPFB_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
