@@ -23,13 +23,6 @@ if ( ! defined( 'ABSPATH' ) ) {
 class MediaLibrary {
 
 	/**
-	 * Track whether sidebar has been rendered.
-	 *
-	 * @var bool
-	 */
-	private bool $sidebar_rendered = false;
-
-	/**
 	 * Register hooks.
 	 *
 	 * @return void
@@ -40,8 +33,13 @@ class MediaLibrary {
 		}
 
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_assets' ) );
-		add_action( 'admin_footer-upload.php', array( $this, 'render_grid_sidebar' ) );
-		add_action( 'restrict_manage_posts', array( $this, 'render_list_sidebar' ) );
+
+		// ALWAYS render sidebar in admin_footer for upload.php.
+		// This ensures the HTML exists for BOTH grid and list views.
+		// The list view sidebar rendered via restrict_manage_posts gets
+		// hidden by WordPress when in grid mode, so we need a separate
+		// copy in the footer that JS can use.
+		add_action( 'admin_footer-upload.php', array( $this, 'render_footer_sidebar' ) );
 
 		// Filter query when a folder is selected (list view).
 		add_action( 'pre_get_posts', array( $this, 'filter_by_folder' ) );
@@ -112,37 +110,12 @@ class MediaLibrary {
 	}
 
 	/**
-	 * Render the folder tree sidebar for the grid view (upload.php).
+	 * Render the folder tree sidebar in the admin footer.
+	 * This is used by BOTH grid and list views.
 	 *
 	 * @return void
 	 */
-	public function render_grid_sidebar(): void {
-		if ( $this->sidebar_rendered ) {
-			return;
-		}
-		$this->sidebar_rendered = true;
-
-		$service = new FolderService();
-		$folders = $service->get_folders( 'media' );
-		$context = 'media';
-		require WPFB_PLUGIN_DIR . 'templates/folder-tree-sidebar.php';
-	}
-
-	/**
-	 * Render the folder tree sidebar for the list view.
-	 *
-	 * @param string $post_type Current post type.
-	 * @return void
-	 */
-	public function render_list_sidebar( string $post_type ): void {
-		if ( 'attachment' !== $post_type ) {
-			return;
-		}
-		if ( $this->sidebar_rendered ) {
-			return;
-		}
-		$this->sidebar_rendered = true;
-
+	public function render_footer_sidebar(): void {
 		$service = new FolderService();
 		$folders = $service->get_folders( 'media' );
 		$context = 'media';
