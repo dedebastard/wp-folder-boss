@@ -1,0 +1,303 @@
+# Copyright (C) 2024 dedebastard
+# This file is distributed under the GPL v2 or later.
+msgid ""
+msgstr ""
+"Project-Id-Version: WP Folder Boss 1.0.0\n"
+"Report-Msgid-Bugs-To: https://github.com/dedebastard/wp-folder-boss/issues\n"
+"POT-Creation-Date: 2024-01-01 00:00:00+00:00\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"PO-Revision-Date: 2024-01-01 00:00:00+00:00\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"Plural-Forms: nplurals=INTEGER; plural=EXPRESSION;\n"
+"X-Generator: WP-CLI 2.x\n"
+"X-Domain: wp-folder-boss\n"
+
+#. Plugin Name of the plugin
+msgid "WP Folder Boss"
+msgstr ""
+
+#. Plugin URI of the plugin
+msgid "https://github.com/dedebastard/wp-folder-boss"
+msgstr ""
+
+#. Description of the plugin
+msgid "Organize your media library, pages, posts, custom post types, users, plugins, WooCommerce orders, products, coupons, and more using folders. Drag and drop, bulk move, and auto-assign uploads."
+msgstr ""
+
+#. Author of the plugin
+msgid "dedebastard"
+msgstr ""
+
+#: includes/Plugin.php
+msgid "Folders"
+msgstr ""
+
+#: includes/Plugin.php
+msgid "Folder"
+msgstr ""
+
+#: includes/Plugin.php
+msgid "Search Folders"
+msgstr ""
+
+#: includes/Plugin.php
+msgid "All Folders"
+msgstr ""
+
+#: includes/Plugin.php
+msgid "Parent Folder"
+msgstr ""
+
+#: includes/Plugin.php
+msgid "Parent Folder:"
+msgstr ""
+
+#: includes/Plugin.php
+msgid "Edit Folder"
+msgstr ""
+
+#: includes/Plugin.php
+msgid "Update Folder"
+msgstr ""
+
+#: includes/Plugin.php
+msgid "Add New Folder"
+msgstr ""
+
+#: includes/Plugin.php
+msgid "New Folder Name"
+msgstr ""
+
+#: includes/Services/FolderService.php
+msgid "Folder name cannot be empty."
+msgstr ""
+
+#: includes/Services/FolderService.php
+msgid "Created folder could not be retrieved."
+msgstr ""
+
+#: includes/Services/FolderService.php
+msgid "Folder not found."
+msgstr ""
+
+#: includes/Services/FolderService.php
+msgid "Updated folder could not be retrieved."
+msgstr ""
+
+#: includes/Rest/SettingsController.php
+msgid "Invalid settings data."
+msgstr ""
+
+#: includes/Admin/AdminMenu.php
+#: includes/Admin/Settings.php
+msgid "WP Folder Boss"
+msgstr ""
+
+#: includes/Admin/AdminMenu.php
+msgid "You do not have permission to access this page."
+msgstr ""
+
+#: includes/Admin/Settings.php
+msgid "Permission denied."
+msgstr ""
+
+#: includes/Admin/MediaLibrary.php
+#: includes/Admin/PostTypeScreen.php
+#: includes/Admin/WooCommerceScreen.php
+#: includes/Admin/UsersScreen.php
+msgid "Folder"
+msgstr ""
+
+#: includes/Admin/MediaLibrary.php
+#: includes/Admin/PostTypeScreen.php
+#: includes/Admin/WooCommerceScreen.php
+msgid "Uncategorized"
+msgstr ""
+
+#: includes/Admin/PostTypeScreen.php
+#: includes/Admin/WooCommerceScreen.php
+#: includes/Admin/UsersScreen.php
+msgid "All Folders"
+msgstr ""
+
+#: includes/Admin/PostTypeScreen.php
+#: includes/Admin/WooCommerceScreen.php
+#: includes/Admin/UsersScreen.php
+msgid "Uncategorized"
+msgstr ""
+
+#: includes/Helpers/Utils.php
+msgid "All Items"
+msgstr ""
+
+#: includes/Helpers/Utils.php
+msgid "Uncategorized"
+msgstr ""
+
+#: includes/Helpers/Utils.php
+msgid "New Folder"
+msgstr ""
+
+#: includes/Helpers/Utils.php
+msgid "New Subfolder"
+msgstr ""
+
+#: includes/Helpers/Utils.php
+msgid "Rename"
+msgstr ""
+
+#: includes/Helpers/Utils.php
+msgid "Delete"
+msgstr ""
+
+#: includes/Helpers/Utils.php
+msgid "Delete this folder? Items inside will become uncategorized."
+msgstr ""
+
+#: includes/Helpers/Utils.php
+msgid "Move to Folder"
+msgstr ""
+
+#: templates/folder-tree-sidebar.php
+msgid "Folders"
+msgstr ""
+
+#: templates/folder-tree-sidebar.php
+msgid "Add Folder"
+msgstr ""
+
+#: templates/folder-tree-sidebar.php
+msgid "All Items"
+msgstr ""
+
+#: templates/folder-tree-sidebar.php
+msgid "Uncategorized"
+msgstr ""
+
+#: templates/folder-tree-sidebar.php
+msgid "Toggle folder"
+msgstr ""
+
+#: templates/folder-tree-sidebar.php
+msgid "Drag to resize"
+msgstr ""
+
+#: templates/folder-tree-sidebar.php
+msgid "New Folder"
+msgstr ""
+
+#: templates/folder-tree-sidebar.php
+msgid "New Subfolder"
+msgstr ""
+
+#: templates/folder-tree-sidebar.php
+msgid "Rename"
+msgstr ""
+
+#: templates/folder-tree-sidebar.php
+msgid "Delete"
+msgstr ""
+
+#: templates/folder-tree-sidebar.php
+msgid "Move to Folder"
+msgstr ""
+
+#: templates/folder-tree-sidebar.php
+msgid "Move"
+msgstr ""
+
+#: templates/folder-tree-sidebar.php
+msgid "Cancel"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "WP Folder Boss — Settings"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "Import complete. %d folder(s) imported."
+msgstr ""
+
+#: templates/settings-page.php
+msgid "%d error(s) occurred."
+msgstr ""
+
+#: templates/settings-page.php
+msgid "Enable Folders For"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "Built-in Screens"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "Media Library"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "Posts"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "Pages"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "Users"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "Plugins"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "WooCommerce"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "Products"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "Orders"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "Coupons"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "Custom Post Types"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "Default Folder for New Uploads"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "— None —"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "Automatically assign new uploads to this folder."
+msgstr ""
+
+#: templates/settings-page.php
+msgid "Import Folders"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "Import your existing folder structure from another plugin."
+msgstr ""
+
+#: templates/settings-page.php
+msgid "Import From"
+msgstr ""
+
+#: templates/settings-page.php
+msgid "Import"
+msgstr ""
