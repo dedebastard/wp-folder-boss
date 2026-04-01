@@ -1,7 +1,7 @@
 /**
  * WP Folder Boss — Media Library Grid Integration
  */
-/* global wpfbData, wpfbMediaData */
+/* global wpfbData, wpfbMediaData, jQuery */
 
 ( function ( $ ) {
 	'use strict';
@@ -14,7 +14,7 @@
 	var sidebarInjected = false;
 
 	/* --------------------------------------------------------- */
-	/*  1. Inject sidebar into the grid view via polling          */
+	/*  1. Inject sidebar into the grid view                     */
 	/* --------------------------------------------------------- */
 
 	function injectSidebar() {
@@ -23,37 +23,79 @@
 		var sidebar = document.getElementById( 'wpfb-sidebar' );
 		if ( ! sidebar ) return false;
 
-		// Target: .media-frame-content is the container WP uses for the grid
-		var target = document.querySelector( '.media-frame-content' );
+		// WordPress grid view structure on upload.php:
+		//   #wpbody-content > .wrap
+		//     > h1
+		//     > .wp-filter (the filter/search bar)
+		//     > .media-frame (the grid frame)
+		//       > .media-frame-content
+		//         > .attachments-browser
+		//           > .media-toolbar
+		//           > ul.attachments
+		//           > .media-sidebar
+
+		// Try multiple possible targets in order of specificity
+		var target = null;
+		var mode = 'none';
+
+		// Option 1: The main page wrapper (.wrap) — we'll put sidebar beside everything
+		var wrap = document.querySelector( 'body.upload-php .wrap' );
+		var mediaFrame = document.querySelector( '.media-frame' );
+
+		if ( wrap && mediaFrame ) {
+			target = wrap;
+			mode = 'wrap';
+		}
+
 		if ( ! target ) return false;
 
-		// Make target a flex row so sidebar sits on the left
-		target.style.display   = 'flex';
-		target.style.flexDirection = 'row';
+		if ( mode === 'wrap' ) {
+			// Strategy: Put sidebar as first child of .wrap using flexbox
+			// This works because .wrap contains EVERYTHING (title, filters, grid)
+			wrap.style.display = 'flex';
+			wrap.style.flexWrap = 'nowrap';
+			wrap.style.alignItems = 'flex-start';
 
-		// Move sidebar inside as first child
-		target.insertBefore( sidebar, target.firstChild );
-		sidebar.style.display = '';
-		sidebar.style.position = 'relative';
-		sidebar.style.height   = 'auto';
-		sidebar.style.minHeight = '100%';
-		sidebar.style.flexShrink = '0';
-		sidebar.style.zIndex   = '1';
+			// Create a container for all the non-sidebar content
+			var contentWrapper = document.getElementById( 'wpfb-content-wrapper' );
+			if ( ! contentWrapper ) {
+				contentWrapper = document.createElement( 'div' );
+				contentWrapper.id = 'wpfb-content-wrapper';
+				contentWrapper.style.flex = '1';
+				contentWrapper.style.minWidth = '0';
+				contentWrapper.style.width = '0'; // Force flex to control width
 
-		// Make the attachments browser fill the remaining space
-		var browser = target.querySelector( '.attachments-browser' );
-		if ( browser ) {
-			browser.style.flex     = '1';
-			browser.style.minWidth = '0';
+				// Move all existing children of .wrap into contentWrapper
+				while ( wrap.firstChild ) {
+					// Don't move the sidebar itself if it's already in .wrap
+					if ( wrap.firstChild === sidebar ) {
+						wrap.removeChild( sidebar );
+						continue;
+					}
+					contentWrapper.appendChild( wrap.firstChild );
+				}
+
+				wrap.appendChild( contentWrapper );
+			}
+
+			// Insert sidebar before contentWrapper
+			sidebar.style.display = '';
+			sidebar.style.position = 'sticky';
+			sidebar.style.top = '32px'; // Below WP admin bar
+			sidebar.style.height = 'calc(100vh - 32px)';
+			sidebar.style.flexShrink = '0';
+			sidebar.style.overflowY = 'auto';
+			sidebar.style.zIndex = '1';
+
+			wrap.insertBefore( sidebar, wrap.firstChild );
 		}
 
 		sidebarInjected = true;
 
-		// Re-init tree if needed (sidebar was hidden, tree may not have initialized)
+		// Re-init tree if it wasn't initialized (sidebar was hidden before)
 		if ( typeof window.wpfbTree === 'undefined' || ! window.wpfbTree ) {
-			var sidebarEl = document.getElementById( 'wpfb-sidebar' );
-			if ( sidebarEl && typeof window.WPFBTreeInit === 'function' ) {
-				window.WPFBTreeInit( sidebarEl );
+			if ( typeof window.WPFBTreeInit === 'function' ) {
+				window.WPFBTreeInit( sidebar );
 			}
 		}
 
@@ -83,7 +125,6 @@
 				options = options || {};
 				options.data = options.data || {};
 
-				// WP sends filters inside options.data.query for the grid AJAX
 				if ( typeof options.data.query === 'object' && options.data.query !== null ) {
 					options.data.query.wpfb_folder = activeFolderId;
 				} else {
@@ -102,8 +143,11 @@
 		if ( e.detail.context !== 'media' ) return;
 		activeFolderId = parseInt( e.detail.folderId, 10 );
 
-		// Refresh the media grid
-		if ( wp.media.frame ) {
+		// Check if we're in grid mode — if so, refresh via wp.media
+		var isGridMode = document.querySelector( '.media-frame' ) !== null
+			&& document.querySelector( '.wp-list-table.media' ) === null;
+
+		if ( isGridMode && wp.media.frame ) {
 			try {
 				var content = wp.media.frame.content.get();
 				if ( content && content.collection ) {
@@ -186,7 +230,6 @@
 		pollForSidebar();
 	}
 
-	// Extra delayed attempts for slow-loading frames
 	setTimeout( pollForSidebar, 500 );
 	setTimeout( pollForSidebar, 1500 );
 	setTimeout( pollForSidebar, 3000 );
