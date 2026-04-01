@@ -1,3 +1,456 @@
+/**
+ * WP Folder Boss — Admin Stylesheet
+ *
+ * Covers:
+ *  - Folder tree sidebar
+ *  - Folder nodes (expand/collapse, hover, selected)
+ *  - Drag & drop feedback
+ *  - Context menu
+ *  - Folder picker modal
+ *  - Floating bulk-action bar
+ *  - Responsive: sidebar collapses to toggle on narrow screens
+ *  - Dark mode (prefers-color-scheme: dark)
+ */
+
+/* ================================================================
+   Variables / Custom Properties
+   ================================================================ */
+
+:root {
+	--wpfb-sidebar-width     : 250px;
+	--wpfb-sidebar-bg        : #f6f7f7;
+	--wpfb-sidebar-border    : #dcdcde;
+	--wpfb-sidebar-text      : #3c434a;
+	--wpfb-node-hover-bg     : #e0e0e0;
+	--wpfb-node-active-bg    : #2271b1;
+	--wpfb-node-active-text  : #fff;
+	--wpfb-count-bg          : #c3c4c7;
+	--wpfb-count-text        : #3c434a;
+	--wpfb-drop-bg           : rgba( 34, 113, 177, 0.15 );
+	--wpfb-drop-border       : #2271b1;
+	--wpfb-menu-bg           : #fff;
+	--wpfb-menu-border       : #dcdcde;
+	--wpfb-menu-shadow       : 0 2px 8px rgba( 0, 0, 0, 0.15 );
+	--wpfb-modal-overlay-bg  : rgba( 0, 0, 0, 0.5 );
+	--wpfb-modal-bg          : #fff;
+	--wpfb-modal-radius      : 4px;
+}
+
+@media ( prefers-color-scheme: dark ) {
+	:root {
+		--wpfb-sidebar-bg       : #1e1e1e;
+		--wpfb-sidebar-border   : #3c434a;
+		--wpfb-sidebar-text     : #e0e0e0;
+		--wpfb-node-hover-bg    : #2c2c2c;
+		--wpfb-count-bg         : #3c434a;
+		--wpfb-count-text       : #e0e0e0;
+		--wpfb-menu-bg          : #2c2c2c;
+		--wpfb-menu-border      : #3c434a;
+		--wpfb-modal-bg         : #2c2c2c;
+	}
+}
+
+/* ================================================================
+   Sidebar — layout
+   ================================================================ */
+
+.wpfb-sidebar {
+	display         : flex;
+	flex-direction  : column;
+	width           : var( --wpfb-sidebar-width );
+	min-height      : 100%;
+	background      : var( --wpfb-sidebar-bg );
+	border-right    : 1px solid var( --wpfb-sidebar-border );
+	color           : var( --wpfb-sidebar-text );
+	font-size       : 13px;
+	position        : relative;
+	box-sizing      : border-box;
+	overflow-y      : auto;
+	flex-shrink     : 0;
+}
+
+/* When sidebar is inside the list-table wrapper */
+.wrap.has-wpfb-sidebar {
+	display : flex;
+}
+
+.wrap.has-wpfb-sidebar .wp-list-table-wrap {
+	flex : 1;
+	min-width : 0;
+}
+
+/* ================================================================
+   Sidebar — header
+   ================================================================ */
+
+.wpfb-sidebar-header {
+	display         : flex;
+	align-items     : center;
+	justify-content : space-between;
+	padding         : 10px 12px;
+	border-bottom   : 1px solid var( --wpfb-sidebar-border );
+	font-weight     : 600;
+	font-size       : 13px;
+}
+
+.wpfb-sidebar-title {
+	text-transform : uppercase;
+	letter-spacing : 0.04em;
+	font-size      : 11px;
+	color          : #646970;
+}
+
+.wpfb-add-folder-btn {
+	width  : 24px;
+	height : 24px;
+	padding : 0 !important;
+	line-height : 22px !important;
+	font-size : 18px !important;
+	text-align : center;
+}
+
+/* ================================================================
+   Folder tree
+   ================================================================ */
+
+.wpfb-folder-tree,
+.wpfb-folder-children {
+	list-style : none;
+	margin     : 0;
+	padding    : 0;
+}
+
+.wpfb-folder-item {
+	position : relative;
+}
+
+.wpfb-folder-node {
+	display      : flex;
+	align-items  : center;
+	padding      : 6px 12px 6px 8px;
+	cursor       : pointer;
+	user-select  : none;
+	border-radius : 3px;
+	transition   : background 0.1s;
+	gap          : 5px;
+}
+
+.wpfb-folder-node:hover {
+	background : var( --wpfb-node-hover-bg );
+}
+
+.wpfb-folder-item[aria-selected="true"] > .wpfb-folder-node {
+	background : var( --wpfb-node-active-bg );
+	color      : var( --wpfb-node-active-text );
+}
+
+.wpfb-folder-item[aria-selected="true"] > .wpfb-folder-node .wpfb-folder-count {
+	background : rgba( 255, 255, 255, 0.3 );
+	color      : #fff;
+}
+
+/* Indentation for nested levels */
+.wpfb-folder-children .wpfb-folder-node {
+	padding-left : 28px;
+}
+
+.wpfb-folder-children .wpfb-folder-children .wpfb-folder-node {
+	padding-left : 44px;
+}
+
+.wpfb-folder-children .wpfb-folder-children .wpfb-folder-children .wpfb-folder-node {
+	padding-left : 60px;
+}
+
+/* ================================================================
+   Toggle button
+   ================================================================ */
+
+.wpfb-toggle-btn {
+	background  : none;
+	border      : none;
+	padding     : 0 2px;
+	cursor      : pointer;
+	color       : inherit;
+	font-size   : 10px;
+	line-height : 1;
+	width       : 16px;
+	text-align  : center;
+	flex-shrink : 0;
+}
+
+.wpfb-toggle-placeholder {
+	display     : inline-block;
+	width       : 16px;
+	flex-shrink : 0;
+}
+
+/* ================================================================
+   Folder icon & name
+   ================================================================ */
+
+.wpfb-folder-icon {
+	width       : 16px;
+	height      : 16px;
+	flex-shrink : 0;
+	opacity     : 0.75;
+}
+
+.wpfb-folder-item[aria-selected="true"] .wpfb-folder-icon {
+	filter  : brightness( 0 ) invert( 1 );
+	opacity : 1;
+}
+
+.wpfb-folder-name {
+	flex        : 1;
+	overflow    : hidden;
+	text-overflow : ellipsis;
+	white-space : nowrap;
+}
+
+/* ================================================================
+   Item count badge
+   ================================================================ */
+
+.wpfb-folder-count {
+	background    : var( --wpfb-count-bg );
+	color         : var( --wpfb-count-text );
+	border-radius : 10px;
+	padding       : 1px 6px;
+	font-size     : 11px;
+	font-weight   : 600;
+	flex-shrink   : 0;
+}
+
+/* ================================================================
+   Resize handle
+   ================================================================ */
+
+.wpfb-resize-handle {
+	position    : absolute;
+	top         : 0;
+	right       : -4px;
+	width       : 8px;
+	height      : 100%;
+	cursor      : ew-resize;
+	z-index     : 10;
+}
+
+.wpfb-resize-handle:hover {
+	background : var( --wpfb-node-active-bg );
+	opacity    : 0.3;
+}
+
+/* ================================================================
+   Drag & drop
+   ================================================================ */
+
+.wpfb-dragging {
+	opacity : 0.5;
+}
+
+.wpfb-drop-target > .wpfb-folder-node {
+	background    : var( --wpfb-drop-bg );
+	outline       : 2px solid var( --wpfb-drop-border );
+	border-radius : 3px;
+}
+
+/* Items draggable in list tables */
+.wp-list-table tr[draggable="true"] {
+	cursor : grab;
+}
+
+.wp-list-table tr[draggable="true"]:active {
+	cursor : grabbing;
+}
+
+.attachment[draggable="true"] {
+	cursor : grab;
+}
+
+/* ================================================================
+   Inline rename input
+   ================================================================ */
+
+.wpfb-rename-input {
+	flex       : 1;
+	border     : 1px solid var( --wpfb-drop-border );
+	border-radius : 2px;
+	padding    : 1px 4px;
+	font-size  : 13px;
+	font-family : inherit;
+	min-width  : 80px;
+}
+
+/* ================================================================
+   Context menu
+   ================================================================ */
+
+.wpfb-context-menu {
+	position      : fixed;
+	z-index       : 9999;
+	background    : var( --wpfb-menu-bg );
+	border        : 1px solid var( --wpfb-menu-border );
+	border-radius : 4px;
+	box-shadow    : var( --wpfb-menu-shadow );
+	padding       : 4px 0;
+	min-width     : 160px;
+}
+
+.wpfb-context-menu ul {
+	list-style : none;
+	margin     : 0;
+	padding    : 0;
+}
+
+.wpfb-context-menu li {
+	padding    : 7px 14px;
+	cursor     : pointer;
+	font-size  : 13px;
+	transition : background 0.1s;
+}
+
+.wpfb-context-menu li:hover {
+	background : var( --wpfb-node-hover-bg );
+}
+
+.wpfb-context-menu .wpfb-menu-danger {
+	color : #b32d2e;
+}
+
+.wpfb-context-menu .wpfb-menu-danger:hover {
+	background : #ffe8e8;
+}
+
+/* ================================================================
+   Folder picker modal
+   ================================================================ */
+
+.wpfb-modal {
+	position        : fixed;
+	inset           : 0;
+	z-index         : 100000;
+	background      : var( --wpfb-modal-overlay-bg );
+	display         : flex;
+	align-items     : center;
+	justify-content : center;
+}
+
+.wpfb-modal-inner {
+	background    : var( --wpfb-modal-bg );
+	border-radius : var( --wpfb-modal-radius );
+	padding       : 24px 28px;
+	min-width     : 320px;
+	max-width     : 480px;
+	max-height    : 80vh;
+	overflow-y    : auto;
+	box-shadow    : 0 4px 24px rgba( 0, 0, 0, 0.25 );
+}
+
+.wpfb-modal-inner h2 {
+	margin     : 0 0 16px;
+	font-size  : 16px;
+}
+
+.wpfb-modal-tree {
+	list-style : none;
+	margin     : 0 0 16px;
+	padding    : 0;
+	max-height : 300px;
+	overflow-y : auto;
+	border     : 1px solid var( --wpfb-sidebar-border );
+	border-radius : 3px;
+}
+
+.wpfb-modal-tree .wpfb-folder-item {
+	padding : 0;
+}
+
+.wpfb-modal-tree .wpfb-folder-item[aria-selected="true"] > .wpfb-folder-node {
+	background : var( --wpfb-node-active-bg );
+	color      : var( --wpfb-node-active-text );
+}
+
+.wpfb-modal-actions {
+	display  : flex;
+	gap      : 8px;
+	justify-content : flex-end;
+}
+
+/* ================================================================
+   Floating bulk-action bar
+   ================================================================ */
+
+.wpfb-float-bar {
+	position        : fixed;
+	bottom          : 20px;
+	left            : 50%;
+	transform       : translateX( -50% );
+	z-index         : 99999;
+	background      : #1d2327;
+	color           : #fff;
+	border-radius   : 4px;
+	padding         : 10px 18px;
+	display         : flex;
+	align-items     : center;
+	gap             : 12px;
+	box-shadow      : 0 2px 12px rgba( 0, 0, 0, 0.3 );
+	font-size       : 13px;
+}
+
+.wpfb-float-label {
+	font-weight : 600;
+}
+
+/* ================================================================
+   Responsive
+   ================================================================ */
+
+@media ( max-width: 782px ) {
+	.wpfb-sidebar {
+		position     : fixed;
+		top          : 46px; /* WP admin bar height on mobile */
+		left         : -250px;
+		z-index      : 9990;
+		height       : calc( 100% - 46px );
+		transition   : left 0.2s ease;
+		box-shadow   : 2px 0 8px rgba( 0, 0, 0, 0.2 );
+	}
+
+	.wpfb-sidebar.is-open {
+		left : 0;
+	}
+
+	.wpfb-sidebar-toggle {
+		display     : flex;
+		align-items : center;
+		justify-content : center;
+		position    : fixed;
+		top         : 50px;
+		left        : 0;
+		width       : 36px;
+		height      : 36px;
+		background  : var( --wpfb-node-active-bg );
+		color       : #fff;
+		border      : none;
+		border-radius : 0 4px 4px 0;
+		cursor      : pointer;
+		z-index     : 9991;
+		font-size   : 18px;
+	}
+
+	.wpfb-sidebar + .media-frame-content,
+	.wpfb-sidebar ~ #wpbody-content {
+		margin-left : 0;
+	}
+}
+
+@media ( min-width: 783px ) {
+	.wpfb-sidebar-toggle {
+		display : none;
+	}
+}
+
 /* ================================================================
    GRID VIEW — Fixed sidebar layout (upload.php)
    This uses the same approach as FileBird: fixed-position sidebar
@@ -12,8 +465,8 @@ body.wpfb-has-sidebar #wpbody-content {
 /* The sidebar itself: fixed position on the left */
 body.wpfb-has-sidebar #wpfb-sidebar {
 	position: fixed !important;
-	top: 32px !important;         /* below WP admin bar */
-	left: 160px !important;       /* after WP admin menu (default width) */
+	top: 32px !important;
+	left: 160px !important;
 	width: 250px !important;
 	height: calc(100vh - 32px) !important;
 	overflow-y: auto !important;
@@ -55,16 +508,6 @@ body.wpfb-has-sidebar.folded #wpfb-sidebar {
 	}
 }
 
-/* Override the old sidebar rules that don't work */
-.wpfb-sidebar + .media-frame-content,
-.wpfb-sidebar ~ #wpbody-content {
-	margin-left: 0;
-}
-
-.media-frame-router ~ .media-frame-content .media-frame-content-router {
-	padding-left: 0;
-}
-
 /* ================================================================
    GRID VIEW — Fixed sidebar for #wpfb-grid-sidebar
    ================================================================ */
@@ -81,8 +524,8 @@ body.wpfb-has-grid-sidebar #wpbody-content {
 	height: calc(100vh - 32px) !important;
 	overflow-y: auto !important;
 	z-index: 999 !important;
-	background: #f6f7f7 !important;
-	border-right: 1px solid #dcdcde !important;
+	background: var(--wpfb-sidebar-bg, #f6f7f7) !important;
+	border-right: 1px solid var(--wpfb-sidebar-border, #dcdcde) !important;
 	box-sizing: border-box !important;
 }
 
