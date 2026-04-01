@@ -1,67 +1,42 @@
 /**
  * WP Folder Boss — Folder Tree Sidebar Component
- *
- * Renders and manages the interactive folder tree sidebar.
- * Fires custom events for integration with other modules.
  */
 /* global wpfbData */
 
 ( function () {
 	'use strict';
 
-	const STORAGE_KEY = 'wpfb_expanded';
+	var STORAGE_KEY = 'wpfb_expanded';
 
-	/**
-	 * Get expanded folder IDs from localStorage.
-	 *
-	 * @returns {Set<string>}
-	 */
 	function getExpanded() {
 		try {
-			const raw = localStorage.getItem( STORAGE_KEY );
+			var raw = localStorage.getItem( STORAGE_KEY );
 			return new Set( raw ? JSON.parse( raw ) : [] );
-		} catch {
+		} catch ( e ) {
 			return new Set();
 		}
 	}
 
-	/**
-	 * Persist expanded folder IDs to localStorage.
-	 *
-	 * @param {Set<string>} expanded
-	 */
 	function saveExpanded( expanded ) {
 		try {
-			localStorage.setItem( STORAGE_KEY, JSON.stringify( [ ...expanded ] ) );
-		} catch {
-			// Ignore storage errors.
-		}
+			localStorage.setItem( STORAGE_KEY, JSON.stringify( Array.from( expanded ) ) );
+		} catch ( e ) {}
 	}
 
-	/**
-	 * Make a REST API request.
-	 *
-	 * @param {string} method  HTTP method.
-	 * @param {string} path    Path relative to REST base.
-	 * @param {object} [body]  Optional request body.
-	 * @returns {Promise<any>}
-	 */
 	function api( method, path, body ) {
-		const opts = {
-			method,
+		var opts = {
+			method: method,
 			headers: {
 				'Content-Type': 'application/json',
 				'X-WP-Nonce': wpfbData.nonce,
 			},
 		};
-
 		if ( body ) {
 			opts.body = JSON.stringify( body );
 		}
-
-		return fetch( wpfbData.restUrl + path, opts ).then( ( r ) => {
+		return fetch( wpfbData.restUrl + path, opts ).then( function ( r ) {
 			if ( ! r.ok ) {
-				return r.json().then( ( err ) => Promise.reject( err ) );
+				return r.json().then( function ( err ) { return Promise.reject( err ); } );
 			}
 			return r.json();
 		} );
@@ -70,423 +45,386 @@
 	/**
 	 * WPFBTree — the main folder tree controller.
 	 */
-	class WPFBTree {
-		/**
-		 * @param {HTMLElement} sidebar
-		 */
-		constructor( sidebar ) {
-			this.sidebar     = sidebar;
-			this.tree        = sidebar.querySelector( '#wpfb-folder-tree' );
-			this.context     = sidebar.dataset.context || 'media';
-			this.contextMenu = document.getElementById( 'wpfb-context-menu' );
-			this.expanded    = getExpanded();
-			this.activeId    = '-1'; // "All Items" by default
-			this.ctxTarget   = null; // The folder item that was right-clicked
+	function WPFBTree( sidebar ) {
+		this.sidebar     = sidebar;
+		this.tree        = sidebar.querySelector( '#wpfb-folder-tree' );
+		this.context     = sidebar.dataset.context || 'media';
+		this.contextMenu = document.getElementById( 'wpfb-context-menu' );
+		this.expanded    = getExpanded();
+		this.activeId    = '-1';
+		this.ctxTarget   = null;
 
-			this._bindEvents();
-			this._restoreExpanded();
-			this._selectNode( this.tree.querySelector( '[data-id="-1"]' ) );
-		}
+		this._bindEvents();
+		this._restoreExpanded();
 
-		/**
-		 * Bind all event listeners on the tree.
-		 */
-		_bindEvents() {
-			// Folder selection (left click on node text).
-			this.tree.addEventListener( 'click', ( e ) => {
-				const node   = e.target.closest( '.wpfb-folder-node' );
-				const toggle = e.target.closest( '.wpfb-toggle-btn' );
-				const item   = e.target.closest( '.wpfb-folder-item' );
-
-				if ( ! item ) return;
-
-				if ( toggle ) {
-					e.stopPropagation();
-					this._toggleItem( item );
-					return;
-				}
-
-				if ( node ) {
-					this._selectNode( item );
-				}
-			} );
-
-			// Inline rename on double-click.
-			this.tree.addEventListener( 'dblclick', ( e ) => {
-				const node = e.target.closest( '.wpfb-folder-node' );
-				if ( ! node ) return;
-				const item = node.closest( '.wpfb-folder-item' );
-				if ( ! item || item.classList.contains( 'wpfb-virtual' ) ) return;
-				this._startRename( item );
-			} );
-
-			// Right-click context menu.
-			this.tree.addEventListener( 'contextmenu', ( e ) => {
-				e.preventDefault();
-				const item = e.target.closest( '.wpfb-folder-item' );
-				this.ctxTarget = item || null;
-				this._showContextMenu( e.clientX, e.clientY, item );
-			} );
-
-			// Add Folder button.
-			const addBtn = this.sidebar.querySelector( '.wpfb-add-folder-btn' );
-			if ( addBtn ) {
-				addBtn.addEventListener( 'click', () => this._promptNewFolder( 0 ) );
-			}
-
-			// Context menu actions.
-			if ( this.contextMenu ) {
-				this.contextMenu.addEventListener( 'click', ( e ) => {
-					const li = e.target.closest( '[data-action]' );
-					if ( ! li ) return;
-					this._handleContextAction( li.dataset.action );
-					this._hideContextMenu();
-				} );
-			}
-
-			// Hide context menu on outside click.
-			document.addEventListener( 'click', ( e ) => {
-				if ( this.contextMenu && ! this.contextMenu.contains( e.target ) ) {
-					this._hideContextMenu();
-				}
-			} );
-
-			// Hide context menu on Escape.
-			document.addEventListener( 'keydown', ( e ) => {
-				if ( e.key === 'Escape' ) {
-					this._hideContextMenu();
-				}
-			} );
-		}
-
-		/**
-		 * Toggle expand/collapse for a folder item with children.
-		 *
-		 * @param {HTMLElement} item
-		 */
-		_toggleItem( item ) {
-			const children    = item.querySelector( '.wpfb-folder-children' );
-			const toggleBtn   = item.querySelector( '.wpfb-toggle-btn' );
-			const id          = item.dataset.id;
-			const isExpanded  = item.getAttribute( 'aria-expanded' ) === 'true';
-
-			if ( ! children ) return;
-
-			if ( isExpanded ) {
-				children.style.display = 'none';
-				item.setAttribute( 'aria-expanded', 'false' );
-				if ( toggleBtn ) toggleBtn.innerHTML = '&#9658;';
-				this.expanded.delete( id );
+		// Check URL for saved folder selection (list view)
+		var urlParams = new URLSearchParams( window.location.search );
+		var savedFolder = urlParams.get( 'wpfb_folder' );
+		if ( savedFolder !== null ) {
+			var savedItem = this.tree.querySelector( '[data-id="' + CSS.escape( savedFolder ) + '"]' );
+			if ( savedItem ) {
+				this._selectNode( savedItem, true ); // true = skip reload
 			} else {
-				children.style.display = '';
-				item.setAttribute( 'aria-expanded', 'true' );
-				if ( toggleBtn ) toggleBtn.innerHTML = '&#9660;';
-				this.expanded.add( id );
+				this._selectNode( this.tree.querySelector( '[data-id="-1"]' ), true );
 			}
-
-			saveExpanded( this.expanded );
-		}
-
-		/**
-		 * Restore expanded state from localStorage.
-		 */
-		_restoreExpanded() {
-			this.expanded.forEach( ( id ) => {
-				const item = this.tree.querySelector( `[data-id="${ CSS.escape( id ) }"]` );
-				if ( item ) {
-					const children = item.querySelector( '.wpfb-folder-children' );
-					const toggleBtn = item.querySelector( '.wpfb-toggle-btn' );
-					if ( children ) {
-						children.style.display = '';
-						item.setAttribute( 'aria-expanded', 'true' );
-						if ( toggleBtn ) toggleBtn.innerHTML = '&#9660;';
-					}
-				}
-			} );
-		}
-
-		/**
-		 * Mark a folder item as selected and fire the filter event.
-		 *
-		 * @param {HTMLElement|null} item
-		 */
-		_selectNode( item ) {
-			if ( ! item ) return;
-
-			// Deselect all.
-			this.tree.querySelectorAll( '[aria-selected="true"]' ).forEach( ( el ) => {
-				el.setAttribute( 'aria-selected', 'false' );
-			} );
-
-			item.setAttribute( 'aria-selected', 'true' );
-			this.activeId = item.dataset.id;
-
-			// Fire custom event so media-library.js and others can react.
-			document.dispatchEvent(
-				new CustomEvent( 'wpfb:folder-selected', {
-					detail: {
-						folderId : this.activeId,
-						context  : this.context,
-					},
-				} )
-			);
-		}
-
-		/**
-		 * Show the context menu at the given coordinates.
-		 *
-		 * @param {number}           x    Client X.
-		 * @param {number}           y    Client Y.
-		 * @param {HTMLElement|null} item Folder item (null if outside any folder).
-		 */
-		_showContextMenu( x, y, item ) {
-			if ( ! this.contextMenu ) return;
-
-			const isVirtual  = item && item.classList.contains( 'wpfb-virtual' );
-			const renameItem = this.contextMenu.querySelector( '[data-action="rename"]' );
-			const deleteItem = this.contextMenu.querySelector( '[data-action="delete"]' );
-			const subItem    = this.contextMenu.querySelector( '[data-action="new-subfolder"]' );
-
-			if ( renameItem ) renameItem.style.display = isVirtual || ! item ? 'none' : '';
-			if ( deleteItem ) deleteItem.style.display = isVirtual || ! item ? 'none' : '';
-			if ( subItem ) subItem.style.display = ! item ? 'none' : '';
-
-			this.contextMenu.style.display = '';
-			this.contextMenu.style.left    = x + 'px';
-			this.contextMenu.style.top     = y + 'px';
-		}
-
-		/**
-		 * Hide the context menu.
-		 */
-		_hideContextMenu() {
-			if ( this.contextMenu ) {
-				this.contextMenu.style.display = 'none';
-			}
-		}
-
-		/**
-		 * Handle a context menu action.
-		 *
-		 * @param {string} action
-		 */
-		_handleContextAction( action ) {
-			const item   = this.ctxTarget;
-			const id     = item ? item.dataset.id : null;
-
-			switch ( action ) {
-				case 'new-folder':
-					this._promptNewFolder( 0 );
-					break;
-				case 'new-subfolder':
-					if ( id && id !== '-1' ) {
-						this._promptNewFolder( parseInt( id, 10 ) );
-					}
-					break;
-				case 'rename':
-					if ( item && ! item.classList.contains( 'wpfb-virtual' ) ) {
-						this._startRename( item );
-					}
-					break;
-				case 'delete':
-					if ( item && ! item.classList.contains( 'wpfb-virtual' ) ) {
-						this._deleteFolder( item );
-					}
-					break;
-			}
-		}
-
-		/**
-		 * Prompt for a new folder name and create it.
-		 *
-		 * @param {number} parentId
-		 */
-		_promptNewFolder( parentId ) {
-			const name = prompt( wpfbData.i18n.newFolder );
-			if ( ! name || ! name.trim() ) return;
-
-			api( 'POST', '/folders', {
-				name        : name.trim(),
-				context_key : this.context,
-				parent      : parentId,
-				order       : 0,
-			} ).then( ( folder ) => {
-				this._addFolderToTree( folder, parentId );
-			} ).catch( () => {
-				// Silent fail — WP will show any server errors.
-			} );
-		}
-
-		/**
-		 * Insert a new folder <li> into the tree.
-		 *
-		 * @param {object} folder Folder data from REST API.
-		 * @param {number} parentId
-		 */
-		_addFolderToTree( folder, parentId ) {
-			const li = this._buildFolderLI( folder );
-
-			if ( parentId === 0 ) {
-				this.tree.appendChild( li );
-			} else {
-				const parentItem = this.tree.querySelector( `[data-id="${ parentId }"]` );
-				if ( ! parentItem ) {
-					this.tree.appendChild( li );
-					return;
-				}
-
-				let children = parentItem.querySelector( '.wpfb-folder-children' );
-				if ( ! children ) {
-					children = document.createElement( 'ul' );
-					children.className = 'wpfb-folder-children';
-					children.setAttribute( 'role', 'group' );
-					parentItem.appendChild( children );
-					parentItem.classList.add( 'wpfb-has-children' );
-
-					// Add toggle button if missing.
-					const node = parentItem.querySelector( '.wpfb-folder-node' );
-					const placeholder = parentItem.querySelector( '.wpfb-toggle-placeholder' );
-					if ( node && placeholder ) {
-						const btn = document.createElement( 'button' );
-						btn.type = 'button';
-						btn.className = 'wpfb-toggle-btn';
-						btn.setAttribute( 'aria-label', wpfbData.i18n.newFolder );
-						btn.innerHTML = '&#9658;';
-						placeholder.replaceWith( btn );
-					}
-				}
-
-				children.style.display = '';
-				parentItem.setAttribute( 'aria-expanded', 'true' );
-				children.appendChild( li );
-			}
-		}
-
-		/**
-		 * Build a <li> element for a folder.
-		 *
-		 * @param {object} folder
-		 * @returns {HTMLElement}
-		 */
-		_buildFolderLI( folder ) {
-			const li = document.createElement( 'li' );
-			li.className = 'wpfb-folder-item';
-			li.dataset.id     = folder.id;
-			li.dataset.parent = folder.parent;
-			li.dataset.order  = folder.order;
-			li.setAttribute( 'role', 'treeitem' );
-			li.setAttribute( 'aria-expanded', 'false' );
-			li.setAttribute( 'aria-selected', 'false' );
-			li.setAttribute( 'draggable', 'true' );
-
-			li.innerHTML = `
-				<span class="wpfb-folder-node">
-					<span class="wpfb-toggle-placeholder"></span>
-					<img src="${ wpfbData.folderIcon }" class="wpfb-folder-icon" alt="" />
-					<span class="wpfb-folder-name">${ this._esc( folder.name ) }</span>
-					<span class="wpfb-folder-count">${ folder.count || 0 }</span>
-				</span>
-			`;
-
-			return li;
-		}
-
-		/**
-		 * HTML-escape a string.
-		 *
-		 * @param {string} str
-		 * @returns {string}
-		 */
-		_esc( str ) {
-			const d = document.createElement( 'div' );
-			d.appendChild( document.createTextNode( str ) );
-			return d.innerHTML;
-		}
-
-		/**
-		 * Start inline rename for a folder item.
-		 *
-		 * @param {HTMLElement} item
-		 */
-		_startRename( item ) {
-			const nameSpan = item.querySelector( '.wpfb-folder-name' );
-			if ( ! nameSpan ) return;
-
-			const currentName = nameSpan.textContent;
-			const input       = document.createElement( 'input' );
-			input.type        = 'text';
-			input.className   = 'wpfb-rename-input';
-			input.value       = currentName;
-
-			nameSpan.replaceWith( input );
-			input.focus();
-			input.select();
-
-			const finish = () => {
-				const newName = input.value.trim();
-				if ( newName && newName !== currentName ) {
-					api( 'PUT', `/folders/${ item.dataset.id }`, { name: newName } )
-						.then( ( folder ) => {
-							const span = document.createElement( 'span' );
-							span.className = 'wpfb-folder-name';
-							span.textContent = folder.name;
-							input.replaceWith( span );
-						} )
-						.catch( () => {
-							const span = document.createElement( 'span' );
-							span.className = 'wpfb-folder-name';
-							span.textContent = currentName;
-							input.replaceWith( span );
-						} );
-				} else {
-					const span = document.createElement( 'span' );
-					span.className = 'wpfb-folder-name';
-					span.textContent = currentName;
-					input.replaceWith( span );
-				}
-			};
-
-			input.addEventListener( 'blur', finish );
-			input.addEventListener( 'keydown', ( e ) => {
-				if ( e.key === 'Enter' ) {
-					e.preventDefault();
-					finish();
-				} else if ( e.key === 'Escape' ) {
-					const span = document.createElement( 'span' );
-					span.className = 'wpfb-folder-name';
-					span.textContent = currentName;
-					input.replaceWith( span );
-				}
-			} );
-		}
-
-		/**
-		 * Delete a folder after confirmation.
-		 *
-		 * @param {HTMLElement} item
-		 */
-		_deleteFolder( item ) {
-			if ( ! confirm( wpfbData.i18n.confirmDelete ) ) return;
-
-			api( 'DELETE', `/folders/${ item.dataset.id }` )
-				.then( () => {
-					item.remove();
-					// If deleted item was selected, reset to "All Items".
-					if ( this.activeId === item.dataset.id ) {
-						this._selectNode( this.tree.querySelector( '[data-id="-1"]' ) );
-					}
-				} )
-				.catch( () => {} );
+		} else {
+			this._selectNode( this.tree.querySelector( '[data-id="-1"]' ), true );
 		}
 	}
 
-	/**
-	 * Initialize the folder tree on DOMContentLoaded.
-	 */
-	function init() {
-		const sidebar = document.getElementById( 'wpfb-sidebar' );
-		if ( ! sidebar ) return;
+	WPFBTree.prototype._bindEvents = function () {
+		var self = this;
 
+		this.tree.addEventListener( 'click', function ( e ) {
+			var node   = e.target.closest( '.wpfb-folder-node' );
+			var toggle = e.target.closest( '.wpfb-toggle-btn' );
+			var item   = e.target.closest( '.wpfb-folder-item' );
+
+			if ( ! item ) return;
+
+			if ( toggle ) {
+				e.stopPropagation();
+				self._toggleItem( item );
+				return;
+			}
+
+			if ( node ) {
+				self._selectNode( item, false );
+			}
+		} );
+
+		this.tree.addEventListener( 'dblclick', function ( e ) {
+			var node = e.target.closest( '.wpfb-folder-node' );
+			if ( ! node ) return;
+			var item = node.closest( '.wpfb-folder-item' );
+			if ( ! item || item.classList.contains( 'wpfb-virtual' ) ) return;
+			self._startRename( item );
+		} );
+
+		this.tree.addEventListener( 'contextmenu', function ( e ) {
+			e.preventDefault();
+			var item = e.target.closest( '.wpfb-folder-item' );
+			self.ctxTarget = item || null;
+			self._showContextMenu( e.clientX, e.clientY, item );
+		} );
+
+		var addBtn = this.sidebar.querySelector( '.wpfb-add-folder-btn' );
+		if ( addBtn ) {
+			addBtn.addEventListener( 'click', function () { self._promptNewFolder( 0 ); } );
+		}
+
+		if ( this.contextMenu ) {
+			this.contextMenu.addEventListener( 'click', function ( e ) {
+				var li = e.target.closest( '[data-action]' );
+				if ( ! li ) return;
+				self._handleContextAction( li.dataset.action );
+				self._hideContextMenu();
+			} );
+		}
+
+		document.addEventListener( 'click', function ( e ) {
+			if ( self.contextMenu && ! self.contextMenu.contains( e.target ) ) {
+				self._hideContextMenu();
+			}
+		} );
+
+		document.addEventListener( 'keydown', function ( e ) {
+			if ( e.key === 'Escape' ) {
+				self._hideContextMenu();
+			}
+		} );
+	};
+
+	WPFBTree.prototype._toggleItem = function ( item ) {
+		var children  = item.querySelector( '.wpfb-folder-children' );
+		var toggleBtn = item.querySelector( '.wpfb-toggle-btn' );
+		var id        = item.dataset.id;
+		var isExpanded = item.getAttribute( 'aria-expanded' ) === 'true';
+
+		if ( ! children ) return;
+
+		if ( isExpanded ) {
+			children.style.display = 'none';
+			item.setAttribute( 'aria-expanded', 'false' );
+			if ( toggleBtn ) toggleBtn.innerHTML = '&#9658;';
+			this.expanded.delete( id );
+		} else {
+			children.style.display = '';
+			item.setAttribute( 'aria-expanded', 'true' );
+			if ( toggleBtn ) toggleBtn.innerHTML = '&#9660;';
+			this.expanded.add( id );
+		}
+
+		saveExpanded( this.expanded );
+	};
+
+	WPFBTree.prototype._restoreExpanded = function () {
+		var self = this;
+		this.expanded.forEach( function ( id ) {
+			var item = self.tree.querySelector( '[data-id="' + CSS.escape( id ) + '"]' );
+			if ( item ) {
+				var children = item.querySelector( '.wpfb-folder-children' );
+				var toggleBtn = item.querySelector( '.wpfb-toggle-btn' );
+				if ( children ) {
+					children.style.display = '';
+					item.setAttribute( 'aria-expanded', 'true' );
+					if ( toggleBtn ) toggleBtn.innerHTML = '&#9660;';
+				}
+			}
+		} );
+	};
+
+	/**
+	 * @param {HTMLElement|null} item
+	 * @param {boolean} skipReload - if true, don't reload page (used on init)
+	 */
+	WPFBTree.prototype._selectNode = function ( item, skipReload ) {
+		if ( ! item ) return;
+
+		this.tree.querySelectorAll( '[aria-selected="true"]' ).forEach( function ( el ) {
+			el.setAttribute( 'aria-selected', 'false' );
+		} );
+
+		item.setAttribute( 'aria-selected', 'true' );
+		this.activeId = item.dataset.id;
+
+		// Fire custom event for media-library.js (grid view)
+		document.dispatchEvent(
+			new CustomEvent( 'wpfb:folder-selected', {
+				detail: {
+					folderId: this.activeId,
+					context: this.context,
+				},
+			} )
+		);
+
+		// For LIST VIEW: reload the page with ?wpfb_folder=ID
+		if ( ! skipReload && this.context === 'media' ) {
+			var isListMode = document.querySelector( '.wp-list-table.media' ) !== null
+				|| window.location.search.indexOf( 'mode=list' ) !== -1;
+
+			if ( isListMode ) {
+				var url = new URL( window.location.href );
+				if ( this.activeId === '-1' ) {
+					url.searchParams.delete( 'wpfb_folder' );
+				} else {
+					url.searchParams.set( 'wpfb_folder', this.activeId );
+				}
+				url.searchParams.delete( 'paged' );
+				window.location.href = url.toString();
+				return;
+			}
+		}
+	};
+
+	WPFBTree.prototype._showContextMenu = function ( x, y, item ) {
+		if ( ! this.contextMenu ) return;
+
+		var isVirtual  = item && item.classList.contains( 'wpfb-virtual' );
+		var renameItem = this.contextMenu.querySelector( '[data-action="rename"]' );
+		var deleteItem = this.contextMenu.querySelector( '[data-action="delete"]' );
+		var subItem    = this.contextMenu.querySelector( '[data-action="new-subfolder"]' );
+
+		if ( renameItem ) renameItem.style.display = isVirtual || ! item ? 'none' : '';
+		if ( deleteItem ) deleteItem.style.display = isVirtual || ! item ? 'none' : '';
+		if ( subItem ) subItem.style.display = ! item ? 'none' : '';
+
+		this.contextMenu.style.display = '';
+		this.contextMenu.style.left    = x + 'px';
+		this.contextMenu.style.top     = y + 'px';
+	};
+
+	WPFBTree.prototype._hideContextMenu = function () {
+		if ( this.contextMenu ) {
+			this.contextMenu.style.display = 'none';
+		}
+	};
+
+	WPFBTree.prototype._handleContextAction = function ( action ) {
+		var item = this.ctxTarget;
+		var id   = item ? item.dataset.id : null;
+
+		switch ( action ) {
+			case 'new-folder':
+				this._promptNewFolder( 0 );
+				break;
+			case 'new-subfolder':
+				if ( id && id !== '-1' ) {
+					this._promptNewFolder( parseInt( id, 10 ) );
+				}
+				break;
+			case 'rename':
+				if ( item && ! item.classList.contains( 'wpfb-virtual' ) ) {
+					this._startRename( item );
+				}
+				break;
+			case 'delete':
+				if ( item && ! item.classList.contains( 'wpfb-virtual' ) ) {
+					this._deleteFolder( item );
+				}
+				break;
+		}
+	};
+
+	WPFBTree.prototype._promptNewFolder = function ( parentId ) {
+		var name = prompt( wpfbData.i18n.newFolder );
+		if ( ! name || ! name.trim() ) return;
+		var self = this;
+
+		api( 'POST', '/folders', {
+			name: name.trim(),
+			context_key: this.context,
+			parent: parentId,
+			order: 0,
+		} ).then( function ( folder ) {
+			self._addFolderToTree( folder, parentId );
+		} ).catch( function () {} );
+	};
+
+	WPFBTree.prototype._addFolderToTree = function ( folder, parentId ) {
+		var li = this._buildFolderLI( folder );
+
+		if ( parentId === 0 ) {
+			this.tree.appendChild( li );
+		} else {
+			var parentItem = this.tree.querySelector( '[data-id="' + parentId + '"]' );
+			if ( ! parentItem ) {
+				this.tree.appendChild( li );
+				return;
+			}
+
+			var children = parentItem.querySelector( '.wpfb-folder-children' );
+			if ( ! children ) {
+				children = document.createElement( 'ul' );
+				children.className = 'wpfb-folder-children';
+				children.setAttribute( 'role', 'group' );
+				parentItem.appendChild( children );
+				parentItem.classList.add( 'wpfb-has-children' );
+
+				var node = parentItem.querySelector( '.wpfb-folder-node' );
+				var placeholder = parentItem.querySelector( '.wpfb-toggle-placeholder' );
+				if ( node && placeholder ) {
+					var btn = document.createElement( 'button' );
+					btn.type = 'button';
+					btn.className = 'wpfb-toggle-btn';
+					btn.setAttribute( 'aria-label', wpfbData.i18n.newFolder );
+					btn.innerHTML = '&#9658;';
+					placeholder.replaceWith( btn );
+				}
+			}
+
+			children.style.display = '';
+			parentItem.setAttribute( 'aria-expanded', 'true' );
+			children.appendChild( li );
+		}
+	};
+
+	WPFBTree.prototype._buildFolderLI = function ( folder ) {
+		var li = document.createElement( 'li' );
+		li.className = 'wpfb-folder-item';
+		li.dataset.id     = folder.id;
+		li.dataset.parent = folder.parent;
+		li.dataset.order  = folder.order;
+		li.setAttribute( 'role', 'treeitem' );
+		li.setAttribute( 'aria-expanded', 'false' );
+		li.setAttribute( 'aria-selected', 'false' );
+		li.setAttribute( 'draggable', 'true' );
+
+		li.innerHTML =
+			'<span class="wpfb-folder-node">' +
+				'<span class="wpfb-toggle-placeholder"></span>' +
+				'<img src="' + wpfbData.folderIcon + '" class="wpfb-folder-icon" alt="" />' +
+				'<span class="wpfb-folder-name">' + this._esc( folder.name ) + '</span>' +
+				'<span class="wpfb-folder-count">' + ( folder.count || 0 ) + '</span>' +
+			'</span>';
+
+		return li;
+	};
+
+	WPFBTree.prototype._esc = function ( str ) {
+		var d = document.createElement( 'div' );
+		d.appendChild( document.createTextNode( str ) );
+		return d.innerHTML;
+	};
+
+	WPFBTree.prototype._startRename = function ( item ) {
+		var nameSpan = item.querySelector( '.wpfb-folder-name' );
+		if ( ! nameSpan ) return;
+
+		var currentName = nameSpan.textContent;
+		var input       = document.createElement( 'input' );
+		input.type      = 'text';
+		input.className = 'wpfb-rename-input';
+		input.value     = currentName;
+
+		nameSpan.replaceWith( input );
+		input.focus();
+		input.select();
+
+		var finished = false;
+		var finish = function () {
+			if ( finished ) return;
+			finished = true;
+			var newName = input.value.trim();
+			if ( newName && newName !== currentName ) {
+				api( 'PUT', '/folders/' + item.dataset.id, { name: newName } )
+					.then( function ( folder ) {
+						var span = document.createElement( 'span' );
+						span.className = 'wpfb-folder-name';
+						span.textContent = folder.name;
+						input.replaceWith( span );
+					} )
+					.catch( function () {
+						var span = document.createElement( 'span' );
+						span.className = 'wpfb-folder-name';
+						span.textContent = currentName;
+						input.replaceWith( span );
+					} );
+			} else {
+				var span = document.createElement( 'span' );
+				span.className = 'wpfb-folder-name';
+				span.textContent = currentName;
+				input.replaceWith( span );
+			}
+		};
+
+		input.addEventListener( 'blur', finish );
+		input.addEventListener( 'keydown', function ( e ) {
+			if ( e.key === 'Enter' ) {
+				e.preventDefault();
+				finish();
+			} else if ( e.key === 'Escape' ) {
+				finished = true;
+				var span = document.createElement( 'span' );
+				span.className = 'wpfb-folder-name';
+				span.textContent = currentName;
+				input.replaceWith( span );
+			}
+		} );
+	};
+
+	WPFBTree.prototype._deleteFolder = function ( item ) {
+		if ( ! confirm( wpfbData.i18n.confirmDelete ) ) return;
+		var self = this;
+
+		api( 'DELETE', '/folders/' + item.dataset.id )
+			.then( function () {
+				item.remove();
+				if ( self.activeId === item.dataset.id ) {
+					self._selectNode( self.tree.querySelector( '[data-id="-1"]' ), true );
+				}
+			} )
+			.catch( function () {} );
+	};
+
+	// Global init function so media-library.js can re-init the tree
+	window.WPFBTreeInit = function ( sidebarEl ) {
+		window.wpfbTree = new WPFBTree( sidebarEl );
+	};
+
+	function init() {
+		var sidebar = document.getElementById( 'wpfb-sidebar' );
+		if ( ! sidebar ) return;
 		window.wpfbTree = new WPFBTree( sidebar );
 	}
 
