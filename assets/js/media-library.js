@@ -1,5 +1,5 @@
 /**
- * WP Folder Boss — Media Library Grid + List Integration
+ * WP Folder Boss — Media Library Grid Integration
  */
 /* global wpfbData, jQuery */
 
@@ -14,36 +14,38 @@
 	var injected = false;
 
 	/* --------------------------------------------------------- */
-	/*  1. Show sidebar — simply unhide it and add body class    */
+	/*  1. Show grid sidebar with fixed positioning via CSS      */
 	/* --------------------------------------------------------- */
 
-	function showSidebar() {
+	function showGridSidebar() {
 		if ( injected ) return true;
 
-		var sidebar = document.getElementById( 'wpfb-sidebar' );
+		// Only act in grid mode
+		var isGridMode = document.querySelector( '.media-frame' ) !== null;
+		if ( ! isGridMode ) return false;
+
+		var sidebar = document.getElementById( 'wpfb-grid-sidebar' );
 		if ( ! sidebar ) return false;
 
-		// Just show the sidebar and add a body class for CSS to handle layout
+		// Show the sidebar
 		sidebar.style.display = '';
-		document.body.classList.add( 'wpfb-has-sidebar' );
+		document.body.classList.add( 'wpfb-has-grid-sidebar' );
 		injected = true;
 
-		// Re-init tree if needed
-		if ( typeof window.wpfbTree === 'undefined' || ! window.wpfbTree ) {
-			if ( typeof window.WPFBTreeInit === 'function' ) {
-				window.WPFBTreeInit( sidebar );
-			}
+		// Initialize the folder tree on this sidebar
+		if ( typeof window.WPFBTreeInit === 'function' ) {
+			window.WPFBTreeInit( sidebar );
 		}
 
 		return true;
 	}
 
 	function poll() {
-		if ( showSidebar() ) return;
+		if ( showGridSidebar() ) return;
 		var attempts = 0;
 		var iv = setInterval( function () {
 			attempts++;
-			if ( showSidebar() || attempts > 300 ) {
+			if ( showGridSidebar() || attempts > 300 ) {
 				clearInterval( iv );
 			}
 		}, 100 );
@@ -154,7 +156,7 @@
 	} );
 
 	/* --------------------------------------------------------- */
-	/*  6. Start                                                 */
+	/*  6. Start polling for grid mode                           */
 	/* --------------------------------------------------------- */
 
 	if ( document.readyState === 'loading' ) {
